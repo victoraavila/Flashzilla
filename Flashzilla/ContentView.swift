@@ -45,14 +45,24 @@ struct ContentView: View {
                 ZStack {
                     // We get a really thick shadow because many cards are overlapping: as the cards depth increases, the shadow increases
                     ForEach(0..<cards.count, id: \.self) { index in
-                        CardView(card: cards[index])
+                        CardView(card: cards[index]) {
+                            // This is a trailing closure that corresponds to the removal function inside CardView
+                            // If we wrap the call to removeCard with a withAnimation call, then the other cards will automatically slide upwards
+                            withAnimation {
+                                removeCard(at: index)
+                            }
+                        }
                             .stacked(at: index, in: cards.count)
                     }
                 }
             }
         }
-        
-        
+    }
+    
+    // A method that handle the removal of a card, by taking an index of the cards Array
+    // This is gonna be connected to the closure that needs to be passed in to CardView
+    func removeCard(at index: Int) {
+        cards.remove(at: index)
     }
 }
 
