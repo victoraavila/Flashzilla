@@ -7,7 +7,6 @@
 
 import Foundation
 
-// Here, we're gonna store a String for the prompt and a String for the answer. We'll also add an example cards as a static property so we can preview and prototype.
 struct Card {
     var prompt: String
     var answer: String
