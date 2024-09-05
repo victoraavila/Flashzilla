@@ -11,6 +11,18 @@ import SwiftUI
 // There is a tiny bug that requires some extra work to fix: when the app is suspended, the timer will run for a few seconds in the background and then pause automatically until the apps come back. To solve this, we can detect whether the app is in the foreground or in the background and pause or restart our timer appropriately. With this change, the timer will automatically pause when the app moves to the background.
 // We will display the timer by adding a Text with a darker background color to make sure it is clearly visible.
 
+// We can disable interactivity for a View by setting allowsHitTesting to false.
+// In our project, we will use that to disable swiping any card when the timer runs out by checking the timeRemaining.
+// To start, add a new modifier to the innermost ZStack.
+
+// When the user has swiped all the cards, our timer will slide to the center of the screen. What we want to happen is the timer to stop, so users can see how fast they went (we also want a Button to reset the cards and try again).
+// Just making isActive = false isn't enough (if the app goes to the background and then to the foreground, isActive will be true once again).
+// 1. We need a method to reset the app so the user can try again (resetCards()).
+// 2. We need the Button that will trigger resetCards() to be shown only when all cards have been removed.
+// 3. We need to stop the timer when all cards were removed and make sure it stays stopped (isActive = false) when coming back to the foreground.
+// 3.1. Add a new line at the end of removeCard(at index:);
+// 3.2. Update the scenePhase code so it explicitly checks for cards in the array.
+
 extension View {
     func stacked(at position: Int, in total: Int) -> some View {
         let offset = Double(total - position)
@@ -58,6 +70,15 @@ struct ContentView: View {
                             .stacked(at: index, in: cards.count)
                     }
                 }
+                .allowsHitTesting(timeRemaining > 0)
+                
+                if cards.isEmpty {
+                    Button("Start Again", action: resetCards)
+                        .padding()
+                        .background(.white)
+                        .foregroundStyle(.black)
+                        .clipShape(.capsule)
+                }
                 
                 // Adding some UI to make it clear which side is positive and which is negative for users with Color Blindness
                 // The outer ZStack allows us to have both the background and the card stack overlapping. We'll use this to put Buttons in the Stack so the users can se which side is good.
@@ -99,8 +120,13 @@ struct ContentView: View {
         
         // Tracking the scene phase changing
         .onChange(of: scenePhase) {
+            // If we are becoming active right now
             if scenePhase == .active {
-                isActive = true
+                // If the array is not empty, proceed counting down the time
+                // If the array is empty, do not
+                if cards.isEmpty == false {
+                    isActive = true
+                }
             } else {
                 isActive = false
             }
@@ -109,6 +135,18 @@ struct ContentView: View {
     
     func removeCard(at index: Int) {
         cards.remove(at: index)
+        
+        // If the array is empty, isActive = false
+        if cards.isEmpty {
+            isActive = false
+        }
+    }
+    
+    func resetCards() {
+        // Just blanking our cards again
+        cards = Array<Card>(repeating: .example, count: 10)
+        timeRemaining = 100
+        isActive = true // Restart the timer counting down
     }
 }
 
