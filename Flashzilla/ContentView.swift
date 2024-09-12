@@ -7,21 +7,18 @@
 
 import SwiftUI
 
-// By using Foundation, SwiftUI and Combine, we can build a Timer to add a little pressure to the user
-// There is a tiny bug that requires some extra work to fix: when the app is suspended, the timer will run for a few seconds in the background and then pause automatically until the apps come back. To solve this, we can detect whether the app is in the foreground or in the background and pause or restart our timer appropriately. With this change, the timer will automatically pause when the app moves to the background.
-// We will display the timer by adding a Text with a darker background color to make sure it is clearly visible.
+// Our app is full of glitches that are worth addressing
+// 1. It is possible to drag cards around when they aren't on the top (which confuses users that may have not seen the card yet);
+// To fix this, we will use .allowsHitTesting() just after .stacked() so the card on top will be the only one we can drag around.
 
-// We can disable interactivity for a View by setting allowsHitTesting to false.
-// In our project, we will use that to disable swiping any card when the timer runs out by checking the timeRemaining.
-// To start, add a new modifier to the innermost ZStack.
+// 2. Our UI is messy when using VoiceOver: when using a real device, one can tap the background and hear "Background. Image.". Besides that, when swiping to the right it will read the text from all cards (even ones that aren't visible).
+// To fix the background issue, we will set it as a decorative image (change Image(.background) to Image(decorative: "background").
+// To fix the cards, we will use .accessibilityHidden() with a similar condition to the one we used in Glitch 1: every card with an index less than the top card should be hidden from the accessibility system.
+// 2.1. Accessibility conflict with gestures: it is not apparent to users how they can control the app with VoiceOver (we don't tell the cards are Buttons, we don't read out the answers, users have no way to swipe the cards to the left or right).
+// To fix Glitch 2.1., we'll make it clear our cards are tappable Buttons by adding .accessibilityAddTraits(.isButton) to the CardView's ZStack; also, we'll help the system to read both the answer and the question by detecting if accessibility is enabled in the iPhone (by checking the environment variable accessibilityVoiceOverEnabled) and if so, we'll have the question in one side of the card and the answer in the other; also, we'll make it easier to mark the card as right or wrong (the checkmark gets read out as a SF Symbol name) by replacing our Images with Buttons that actually remove the top card from the deck. We'll also provide a label and a hint so users get a better idea of what the Buttons do.
 
-// When the user has swiped all the cards, our timer will slide to the center of the screen. What we want to happen is the timer to stop, so users can see how fast they went (we also want a Button to reset the cards and try again).
-// Just making isActive = false isn't enough (if the app goes to the background and then to the foreground, isActive will be true once again).
-// 1. We need a method to reset the app so the user can try again (resetCards()).
-// 2. We need the Button that will trigger resetCards() to be shown only when all cards have been removed.
-// 3. We need to stop the timer when all cards were removed and make sure it stays stopped (isActive = false) when coming back to the foreground.
-// 3.1. Add a new line at the end of removeCard(at index:);
-// 3.2. Update the scenePhase code so it explicitly checks for cards in the array.
+// 3. If you start to drag a card, but then release it, you can't tell what happened: is it removing it? Is it readding it? It just jumps back.
+// To fix Glitch 3, we need to attach a Spring animation to our card, so it will slide back to the center. Let's add an .animation() to the end of CardView's ZStack.
 
 extension View {
     func stacked(at position: Int, in total: Int) -> some View {
@@ -32,21 +29,18 @@ extension View {
 
 struct ContentView: View {
     @Environment(\.accessibilityDifferentiateWithoutColor) var accessibilityDifferentiateWithoutColor
+    @Environment(\.accessibilityVoiceOverEnabled) var accessibilityVoiceOverEnabled
     @State private var cards = Array<Card>(repeating: .example, count: 10)
     
-    // For the first part of the Timer, we will create 2 new properties: the timer itself (which will fire once a second) and a timeRemaining property (from which we subtract one every time the timer fires). This allows us to show how many seconds remain in the current app run.
-    @State private var timeRemaining = 100 // 100 seconds to start
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect() // Using the main thread
-    // Instead of using date subtraction, we will just subtract from timeRemaining as it is simpler.
+    @State private var timeRemaining = 100
+    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
-    // Storing whether the app is currently active
-    // We will also consider the app inactive if the player has gone through their full deck of flash cards
-    @Environment(\.scenePhase) var scenePhase // This tells whether the app is active or inactive in terms of visibility
+    @Environment(\.scenePhase) var scenePhase
     @State private var isActive = true
     
     var body: some View {
         ZStack {
-            Image(.background)
+            Image(decorative: "background")
                 .resizable()
                 .ignoresSafeArea()
             
@@ -68,6 +62,8 @@ struct ContentView: View {
                             }
                         }
                             .stacked(at: index, in: cards.count)
+                            .allowsHitTesting(index == cards.count - 1) // True if this is the last card.
+                            .accessibilityHidden(index < cards.count - 1) // Hide all cards besides the one on top.
                     }
                 }
                 .allowsHitTesting(timeRemaining > 0)
@@ -80,27 +76,40 @@ struct ContentView: View {
                         .clipShape(.capsule)
                 }
                 
-                // Adding some UI to make it clear which side is positive and which is negative for users with Color Blindness
-                // The outer ZStack allows us to have both the background and the card stack overlapping. We'll use this to put Buttons in the Stack so the users can se which side is good.
-                if accessibilityDifferentiateWithoutColor {
+                // Making these Buttons visible when either differentiateWithoutColor or voiceOver is enabled. For this, we added another environment property called accessibilityVoiceOverEnabled
+                if accessibilityDifferentiateWithoutColor || accessibilityVoiceOverEnabled {
                     VStack {
                         Spacer()
                         
-                        // All the Images in this Stack will be pushed to the very bottom of the screen
                         HStack {
-                            Image(systemName: "xmark.circle") // The wrong side of things
-                                .padding()
-                                .background(.black.opacity(0.7))
-                                .clipShape(.circle)
+                            Button {
+                                withAnimation {
+                                    removeCard(at: cards.count - 1)
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle")
+                                    .padding()
+                                    .background(.black.opacity(0.7))
+                                    .clipShape(.circle)
+                            }
+                            .accessibilityLabel("Wrong")
+                            .accessibilityHint("Mark your answer as being incorrect.")
                             
                             Spacer()
                             
-                            Image(systemName: "checkmark.circle") // The correct side of things
-                                .padding()
-                                .background(.black.opacity(0.7))
-                                .clipShape(.circle)
+                            Button {
+                                withAnimation {
+                                    removeCard(at: cards.count - 1)
+                                }
+                            } label: {
+                                Image(systemName: "checkmark.circle")
+                                    .padding()
+                                    .background(.black.opacity(0.7))
+                                    .clipShape(.circle)
+                            }
+                            .accessibilityLabel("Correct")
+                            .accessibilityHint("Mark your answer as being correct.")
                         }
-                        // Modifiers for the HStack
                         .foregroundStyle(.white)
                         .font(.largeTitle)
                         .padding()
@@ -109,21 +118,15 @@ struct ContentView: View {
             }
         }
         .onReceive(timer) { time in
-            // Exit immediately if isActive == false
             guard isActive else { return }
             
-            // This makes our timer count down to 0
-            if timeRemaining > 0 { // Just to make sure we never get negative numbers
+            if timeRemaining > 0 {
                 timeRemaining -= 1
             }
         }
         
-        // Tracking the scene phase changing
         .onChange(of: scenePhase) {
-            // If we are becoming active right now
             if scenePhase == .active {
-                // If the array is not empty, proceed counting down the time
-                // If the array is empty, do not
                 if cards.isEmpty == false {
                     isActive = true
                 }
@@ -134,19 +137,20 @@ struct ContentView: View {
     }
     
     func removeCard(at index: Int) {
+        // We need to add a guard check at the start of this removeCard(at:) since these Buttons continue on screen even after the last card is removed
+        guard index >= 0 else { return }
+        
         cards.remove(at: index)
         
-        // If the array is empty, isActive = false
         if cards.isEmpty {
             isActive = false
         }
     }
     
     func resetCards() {
-        // Just blanking our cards again
         cards = Array<Card>(repeating: .example, count: 10)
         timeRemaining = 100
-        isActive = true // Restart the timer counting down
+        isActive = true
     }
 }
 
