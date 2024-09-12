@@ -20,6 +20,12 @@ import SwiftUI
 // 3. If you start to drag a card, but then release it, you can't tell what happened: is it removing it? Is it readding it? It just jumps back.
 // To fix Glitch 3, we need to attach a Spring animation to our card, so it will slide back to the center. Let's add an .animation() to the end of CardView's ZStack.
 
+// We will create a new View that lets users add new cards and see all of them.
+// 1. We need to create an @State that controls whether our editing screen is visible.
+// 2. Add a Button to flip the @State Bool to true just before the Buttons that are shown when accessibility is enabled.
+// 3. The new EditCards will encode and decode a card Array to UserDefaults. So, we have to make Card conform to Codable.
+// 4. Create the view EditCards.
+
 extension View {
     func stacked(at position: Int, in total: Int) -> some View {
         let offset = Double(total - position)
@@ -30,7 +36,11 @@ extension View {
 struct ContentView: View {
     @Environment(\.accessibilityDifferentiateWithoutColor) var accessibilityDifferentiateWithoutColor
     @Environment(\.accessibilityVoiceOverEnabled) var accessibilityVoiceOverEnabled
-    @State private var cards = Array<Card>(repeating: .example, count: 10)
+    
+    // Now that we have the EditCards View, we can get rid of the example data and fill the cards at runtime
+//    @State private var cards = Array<Card>(repeating: .example, count: 10)
+    @State private var cards = [Card]()
+    @State private var showingEditScreen = false
     
     @State private var timeRemaining = 100
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -61,9 +71,9 @@ struct ContentView: View {
                                 removeCard(at: index)
                             }
                         }
-                            .stacked(at: index, in: cards.count)
-                            .allowsHitTesting(index == cards.count - 1) // True if this is the last card.
-                            .accessibilityHidden(index < cards.count - 1) // Hide all cards besides the one on top.
+                        .stacked(at: index, in: cards.count)
+                        .allowsHitTesting(index == cards.count - 1) // True if this is the last card.
+                        .accessibilityHidden(index < cards.count - 1) // Hide all cards besides the one on top.
                     }
                 }
                 .allowsHitTesting(timeRemaining > 0)
@@ -75,6 +85,27 @@ struct ContentView: View {
                         .foregroundStyle(.black)
                         .clipShape(.capsule)
                 }
+            }
+                
+                VStack {
+                    HStack {
+                        Spacer()
+                        
+                        Button {
+                            showingEditScreen = true
+                        } label: {
+                            Image(systemName: "plus.circle")
+                                .padding()
+                                .background(.black.opacity(0.7))
+                                .clipShape(.circle)
+                        }
+                    }
+                    
+                    Spacer() // To push the HStack to the top
+                }
+                .foregroundStyle(.white)
+                .font(.largeTitle)
+                .padding()
                 
                 // Making these Buttons visible when either differentiateWithoutColor or voiceOver is enabled. For this, we added another environment property called accessibilityVoiceOverEnabled
                 if accessibilityDifferentiateWithoutColor || accessibilityVoiceOverEnabled {
@@ -115,7 +146,6 @@ struct ContentView: View {
                         .padding()
                     }
                 }
-            }
         }
         .onReceive(timer) { time in
             guard isActive else { return }
@@ -134,6 +164,16 @@ struct ContentView: View {
                 isActive = false
             }
         }
+        // When we are using .sheet(), we've got to give it a function that creates a View and returns it to be shown on the sheet
+        // When we call EditCards(), we are using Syntactic Sugar: we are treating EditCards as a function and because of this Swift automatically calls its initializer. In practice, EditCards() = EditCards.init().
+//        .sheet(isPresented: $showingEditScreen, onDismiss: resetCards) { // Calling resetCards() when dismissing
+//            EditCards()
+//        }
+        // Following the above reasoning, we can pass EditCards.init() directly to the sheet
+        .sheet(isPresented: $showingEditScreen, onDismiss: resetCards, content: EditCards.init) // Call init when you are ready to go, and it will send the View back to the sheet. This approach only works because the EditCards' initializer expects no parameters. If it does, we have to use the above approach.
+        
+        // We also want to call resetCards() when the View first appears.
+        .onAppear(perform: resetCards)
     }
     
     func removeCard(at index: Int) {
@@ -148,9 +188,22 @@ struct ContentView: View {
     }
     
     func resetCards() {
-        cards = Array<Card>(repeating: .example, count: 10)
+//        cards = Array<Card>(repeating: .example, count: 10) // This is not needed anymore
         timeRemaining = 100
         isActive = true
+        loadData() // Getting data from UserDefaults every time
+    }
+    
+    // We also need to read the cards' properties on demand
+    // Reading from UserDefaults
+    func loadData() {
+        // If we can read things from the key "Cards"
+        if let data = UserDefaults.standard.data(forKey: "Cards") {
+            // If we can decode it
+            if let decoded = try? JSONDecoder().decode([Card].self, from: data) {
+                cards = decoded
+            }
+        }
     }
 }
 
