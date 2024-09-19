@@ -38,7 +38,6 @@ struct ContentView: View {
     @Environment(\.accessibilityVoiceOverEnabled) var accessibilityVoiceOverEnabled
     
     // Now that we have the EditCards View, we can get rid of the example data and fill the cards at runtime
-//    @State private var cards = Array<Card>(repeating: .example, count: 10)
     @State private var cards = [Card]()
     @State private var showingEditScreen = false
     
@@ -64,16 +63,24 @@ struct ContentView: View {
                     .background(.black.opacity(0.75))
                     .clipShape(.capsule)
                 
+                
                 ZStack {
-                    ForEach(0..<cards.count, id: \.self) { index in
-                        CardView(card: cards[index]) {
-                            withAnimation {
-                                removeCard(at: index)
+                    ForEach(cards) { card in
+                        CardView(card: card, removal:
+                            {
+                                withAnimation {
+                                    removeCard(at: getCardIndex(of: card))
                             }
-                        }
-                        .stacked(at: index, in: cards.count)
-                        .allowsHitTesting(index == cards.count - 1) // True if this is the last card.
-                        .accessibilityHidden(index < cards.count - 1) // Hide all cards besides the one on top.
+                        }, keeping:
+                            {
+                                withAnimation {
+                                    putCardAtTheEnd(at: getCardIndex(of: card))
+                                }
+                            }
+                        )
+                        .stacked(at: getCardIndex(of: card), in: cards.count)
+                        .allowsHitTesting(getCardIndex(of: card) == cards.count - 1) // True if this is the last card.
+                        .accessibilityHidden(getCardIndex(of: card) < cards.count - 1) // Hide all cards besides the one on top.
                     }
                 }
                 .allowsHitTesting(timeRemaining > 0)
@@ -176,6 +183,15 @@ struct ContentView: View {
         .onAppear(perform: resetCards)
     }
     
+    func getCardIndex(of card: Card) -> Int {
+        for i in 0..<cards.count {
+            if cards[i].id == card.id {
+                return i
+            }
+        }
+        return -1
+    }
+    
     func removeCard(at index: Int) {
         // We need to add a guard check at the start of this removeCard(at:) since these Buttons continue on screen even after the last card is removed
         guard index >= 0 else { return }
@@ -187,8 +203,13 @@ struct ContentView: View {
         }
     }
     
+    func putCardAtTheEnd(at index: Int) {
+        let newCard = Card(id: UUID(), prompt: cards[index].prompt, answer: cards[index].answer)
+        cards.remove(at: index)
+        cards.insert(newCard, at: 0)
+    }
+    
     func resetCards() {
-//        cards = Array<Card>(repeating: .example, count: 10) // This is not needed anymore
         timeRemaining = 100
         isActive = true
         loadData() // Getting data from UserDefaults every time

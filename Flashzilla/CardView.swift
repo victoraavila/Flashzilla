@@ -7,6 +7,20 @@
 
 import SwiftUI
 
+struct BackgroundColor: ViewModifier {
+    var offset: CGSize
+    
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: 25)
+                    .fill(offset.width >= 0
+                          ? (offset.width > 0 ? Color.green : Color.white)
+                          : Color.red)
+            )
+    }
+}
+
 struct CardView: View {
     @Environment(\.accessibilityDifferentiateWithoutColor) var accessibilityDifferentiateWithoutColor
     @Environment(\.accessibilityVoiceOverEnabled) var accessibilityVoiceOverEnabled
@@ -18,6 +32,7 @@ struct CardView: View {
     let card: Card
     
     var removal: (() -> Void)? = nil
+    var keeping: (() -> Void)? = nil
     
     var body: some View {
         ZStack {
@@ -28,12 +43,7 @@ struct CardView: View {
                     : .white
                         .opacity(1 - Double(abs(offset.width/50)))
                 )
-                .background(
-                    accessibilityDifferentiateWithoutColor
-                    ? nil
-                    : RoundedRectangle(cornerRadius: 25)
-                        .fill(offset.width > 0 ? .green : .red)
-                )
+                .modifier(BackgroundColor(offset: offset))
                 .shadow(radius: 10)
             
             VStack {
@@ -68,8 +78,10 @@ struct CardView: View {
                     offset = gesture.translation
                 }
                 .onEnded { _ in
-                    if abs(offset.width) > 100 {
+                    if offset.width > 100 {
                         removal?()
+                    } else if offset.width < -100 {
+                        keeping?()
                     } else {
                         offset = .zero
                     }
