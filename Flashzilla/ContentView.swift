@@ -47,6 +47,9 @@ struct ContentView: View {
     @Environment(\.scenePhase) var scenePhase
     @State private var isActive = true
     
+    // The URL to which the cards will be saved
+    let savePath = URL.documentsDirectory.appending(path: "AddedCards")
+    
     var body: some View {
         ZStack {
             Image(decorative: "background")
@@ -218,12 +221,11 @@ struct ContentView: View {
     // We also need to read the cards' properties on demand
     // Reading from UserDefaults
     func loadData() {
-        // If we can read things from the key "Cards"
-        if let data = UserDefaults.standard.data(forKey: "Cards") {
-            // If we can decode it
-            if let decoded = try? JSONDecoder().decode([Card].self, from: data) {
-                cards = decoded
-            }
+        do {
+            let data = try Data(contentsOf: savePath)
+            cards = try JSONDecoder().decode([Card].self, from: data)
+        } catch {
+            cards = [Card]()
         }
     }
 }
