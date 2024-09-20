@@ -47,8 +47,8 @@ struct ContentView: View {
     @Environment(\.scenePhase) var scenePhase
     @State private var isActive = true
     
-    // The URL to which the cards will be saved
-    let savePath = URL.documentsDirectory.appending(path: "AddedCards")
+    // Instantiating a CardStoreManager to read and save data
+    let cardStoreManager = CardStoreManager()
     
     var body: some View {
         ZStack {
@@ -215,18 +215,7 @@ struct ContentView: View {
     func resetCards() {
         timeRemaining = 100
         isActive = true
-        loadData() // Getting data from UserDefaults every time
-    }
-    
-    // We also need to read the cards' properties on demand
-    // Reading from UserDefaults
-    func loadData() {
-        do {
-            let data = try Data(contentsOf: savePath)
-            cards = try JSONDecoder().decode([Card].self, from: data)
-        } catch {
-            cards = [Card]()
-        }
+        cards = cardStoreManager.loadData()
     }
 }
 

@@ -27,8 +27,8 @@ struct EditCards: View {
     @State private var newPrompt = ""
     @State private var newAnswer = ""
     
-    // The URL to which the cards will be saved
-    let savePath = URL.documentsDirectory.appending(path: "AddedCards")
+    // Instantiating a CardStoreManager to read and save data
+    let cardStoreManager = CardStoreManager()
     
     var body: some View {
         NavigationStack {
@@ -57,7 +57,9 @@ struct EditCards: View {
             .toolbar {
                 Button("Done", action: done) // done is a new method
             }
-            .onAppear(perform: loadData) // A new method
+            .onAppear {
+                cards = cardStoreManager.loadData()
+            }
         }
     }
     
@@ -65,29 +67,6 @@ struct EditCards: View {
         dismiss()
     }
     
-    // Reading from UserDefaults
-    func loadData() {
-        do {
-            let data = try Data(contentsOf: savePath)
-            cards = try JSONDecoder().decode([Card].self, from: data)
-        } catch {
-            cards = [Card]()
-        }
-    }
-    
-    // Besides adding cards, we gotta have a way to save cards too. This will be called from inside addCard().
-    func saveData() {
-        do {
-            let data = try JSONEncoder().encode(cards)
-            try data.write(to: savePath, options: [.atomic, .completeFileProtection])
-        } catch {
-            print("Unable to save data.")
-        }
-        
-        // Clearing the fields
-        newPrompt = ""
-        newAnswer = ""
-    }
     
     func addCard() {
         // Trimming whitespaces for neatness
@@ -103,12 +82,16 @@ struct EditCards: View {
         // Place the card at the beginning of the deck
         cards.insert(card, at: 0)
         
-        saveData()
+        cardStoreManager.saveData(cards: cards)
+        
+        // Clearing the fields
+        newPrompt = ""
+        newAnswer = ""
     }
     
     func removeCards(at offsets: IndexSet) {
         cards.remove(atOffsets: offsets)
-        saveData()
+        cardStoreManager.saveData(cards: cards)
     }
 }
 
